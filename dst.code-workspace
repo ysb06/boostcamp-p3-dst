@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../opt/ml/input"
+		}
+	],
+	"settings": {
+		"python.pythonPath": "/workspace/.venv/bin/python3.8"
+	}
+}
