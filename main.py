@@ -1,42 +1,54 @@
 import argparse
 import copy
-from dst.train import TraineeBase
-import dst.train
 import os
-from typing import Dict
+from typing import Dict, Type
 
 import torch
 import yaml
+
+import dst.train
+from dst.data.loader import OpenVocabDSTFeature
+from dst.train import TraineeBase
 
 
 def initialize():
     training_config = {
         "data_path": {
-            "root": "/opt/ml/input/data",
-            "training_data": "/opt/ml/input/data/train_dataset",
-            "evaluation_data": "/opt/ml/input/data/eval_dataset",
+            "root_dir": "/opt/ml/input/data",
+            "training_dialogue_data": "/opt/ml/input/data/train_dataset/train_dials.json",
+            "training_slot_meta_data": "/opt/ml/input/data/train_dataset/slot_meta.json",
+            "training_ontology_data": "/opt/ml/input/data/train_dataset/ontology.json",
+            "training_features_data": "/opt/ml/input/data/train_dataset/open_vocab_features.pkl",
+            "evaluation_dialogue_data": "/opt/ml/input/data/eval_dataset/eval_dials.json",
+            "evaluation_slot_meta_data": "/opt/ml/input/data/eval_dataset/slot_meta.json",
         },
         "save_path": {
-            "root": "./results",
-            "checkpoints_path": "./results/checkpoint",
-            "tensorboard_log_path": "./results/tensorboard",
-            "log_path": "./results/log",
+            "root_dir": "./results",
+            "checkpoints_dir": "./results/checkpoint",
+            "tensorboard_log_dir": "./results/tensorboard",
+            "yaml_log_dir": "./results/yaml_log",
         },
         "training_base": {
-            "trainee_type": "BaselineTrainee",
+            "trainee_type": "TRADETrainee",
             "trainee_name": "No_name",
             "hyperparameters": {
                 "model": {
-                    "name": "bert-base-multilingual-cased",
-                    "type": "Bert",
+                    "type" : "TRADE",
+                    "prtrained_embedding_model": "monologg/koelectra-base-v3-discriminator",
                 },
                 "args": {
-                    "num_train_epochs": 5,              # total number of training epochs
-                    "learning_rate": 5e-5,              # learning_rate
-                    "per_device_train_batch_size": 16,  # batch size per device during training
-                    # number of warmup steps for learning rate scheduler
-                    "warmup_steps": 500,
-                    "weight_decay": 0.01,               # strength of weight decay
+                    "vocab_size": 1,
+                    "hidden_size": 1,
+                    "hidden_dropout_prob": 1,
+                    "n_gate": 1,
+                    "vocab_size": 1,
+                    "vocab_size": 1,
+                    "vocab_size": 1,
+                    "vocab_size": 1,
+                },
+                "dev_split" : {
+                    "split_k" : 5,
+                    "target" : None
                 },
                 "seed": 327459
             }
@@ -91,6 +103,8 @@ if __name__ == "__main__":
 
     # 필요한 폴더 생성
     save_paths = config["save_path"]
+    if not os.path.isdir(save_paths["root_dir"]):
+        os.mkdir(save_paths["root_dir"])
     for key in save_paths:
         if not os.path.isdir(save_paths[key]):
             os.mkdir(save_paths[key])
@@ -106,8 +120,14 @@ if __name__ == "__main__":
     # Training
     for index, setting in enumerate(training_settings):
         if do_training:
-            trainee_class = getattr(dst.train, setting["trainee_type"])
-            trainee: TraineeBase = trainee_class(target_device, config["data_path"]["training_data"], save_paths, setting["hyperparameters"])
+            trainee_class: Type[TraineeBase] = getattr(dst.train, setting["trainee_type"])
+            trainee: TraineeBase = trainee_class(
+                setting["trainee_name"], 
+                config["data_path"], 
+                config["save_path"], 
+                setting["hyperparameters"], 
+                target_device
+            )
             trainee.train()
         
         if do_inference:

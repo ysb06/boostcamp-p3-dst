@@ -1,25 +1,30 @@
 data_path:
-  evaluation_data: /opt/ml/input/data/train_dataset
-  root: /opt/ml/input/data
-  training_data: /opt/ml/input/data/eval_dataset
+  evaluation_dialogue_data: /opt/ml/input/data/eval_dataset/eval_dials.json
+  evaluation_slot_meta_data: /opt/ml/input/data/eval_dataset/slot_meta.json
+  root_dir: /opt/ml/input/data
+  training_dialogue_data: /opt/ml/input/data/train_dataset/train_dials.json
+  training_features_data: /opt/ml/input/data/train_dataset/open_vocab_features.pkl
+  training_ontology_data: /opt/ml/input/data/train_dataset/ontology.json
+  training_slot_meta_data: /opt/ml/input/data/train_dataset/slot_meta.json
 save_path:
-  checkpoints_path: ./results/checkpoint
-  log_path: ./results/log
-  root: ./results
-  tensorboard_log_path: ./results/tensorboard
+  checkpoints_dir: ./results/checkpoint
+  root_dir: ./results
+  tensorboard_log_dir: ./results/tensorboard
+  yaml_log_dir: ./results/yaml_log
 training_base:
   hyperparameters:
-    args:
-      learning_rate: 5.0e-05
-      num_train_epochs: 5
-      per_device_train_batch_size: 16
-      warmup_steps: 500
-      weight_decay: 0.01
+    args: {
+      
+    }
+    dev_split:
+      split_k: 5
+      target: null
     model:
-      name: bert-base-multilingual-cased
-      type: Bert
+      prtrained_model: null
+      prtrained_tokenizer: monologg/koelectra-base-v3-discriminator
+      type: TRADE
     seed: 327459
-  trainee_name: baseline_trainee
-  trainee_type: BaselineTrainee
+  trainee_name: No_name
+  trainee_type: TRADETrainee
 trainings:
-- {}
+- trainee_name: No_name
