@@ -1,16 +1,20 @@
 import json
+import os
+import pickle
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
-from copy import deepcopy
-import pickle
 
 import pandas as pd
+import torch
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import Dataset
-from transformers import BertTokenizer
 from tqdm import tqdm
-import torch
+from transformers import BertTokenizer
 
+pad_token_id = 3
+# 이 부분이 tokenizer 부를 때마다 달라질 텐데
+# 전역 변수로 사용하지 않을 방법이 있을까?
 
 @dataclass(frozen=True)
 class DSTInputExample:
@@ -27,6 +31,7 @@ class OpenVocabDSTFeature:
     segment_idx: List[int]
     gating: List[int]
     target: List[List[int]]
+    target_origin: List[str]
 
 
 class WOSDataset(Dataset):
@@ -52,6 +57,13 @@ def load_TRADE_dataset_from_raw(
     # Baseline을 그대로 가지고 왔지만 저 모델은 Electra 계열인데....?
 
     print("Load data from raw...")
+    if dev_split_k <= 1:
+        # validation 데이터셋이 없는 경우 대응이 안됨.
+        raise Exception("Currently dev_split_k cannot be lower than 2")
+    
+    # 무조건 straitified k fold로 나누고 전체에 대해서 토큰화를 진행하는 비효율적인 코드로 되어 있음.
+    # 토큰화 후 straitified k fold로 나누는 게 더 효율적일듯.
+    # 코드 고치기...
     train_input_folds, dev_input_folds = _convert_data_from_raw(raw_dir_path, dev_split_k, seed=seed)
     print("Converting raw finished")
     
@@ -83,10 +95,15 @@ def load_TRADE_dataset_from_raw(
     tokenized_data_path = f"{raw_root_dir}/train_dataset/ov_features_{dev_split_k}_{seed}.pkl"
     with open(tokenized_data_path, 'wb') as fwb:
         # 변환이 완료되면 저장
-        pickle.dump((train_feature_folds, dev_feature_folds), fwb)
+        pickle.dump(
+            (
+                train_feature_folds, 
+                dev_feature_folds
+            ), 
+        fwb)
     print(f"Features saved at {tokenized_data_path}")
 
-    return load_TRADE_dataset_from_features(tokenized_data_path)
+    return load_TRADE_dataset_from_features(tokenized_data_path, raw_slot_meta_path, tokenizer)
 
 
 def load_TRADE_dataset_from_features(
@@ -95,7 +112,7 @@ def load_TRADE_dataset_from_features(
         tokenizer: BertTokenizer
     ) -> Tuple[List[WOSDataset], List[WOSDataset], List[List[int]]]:
     # 강제로 다시 읽어 들임. pickle이 제대로 저장되어야 함
-    print("Loading Features...")
+    print(f"Loading Features...[{tokenized_data_path}] {int(os.path.getsize(tokenized_data_path) / (1024**2))} MB")
     with open(tokenized_data_path, 'rb') as frb:
         train_feature_folds, dev_feature_folds = pickle.load(frb)
     
@@ -115,11 +132,30 @@ def load_TRADE_dataset_from_features(
             tokenizer.encode(slot.replace("-", " "), add_special_tokens=False)
         )
 
+    global pad_token_id
+    pad_token_id = tokenizer.pad_token_id
+    # 전역변수 쓰는 이 코드를 어떻게 해야 할까...
+
     return training_datasets, dev_datasets, tokenized_slot_meta
 
     
-def collate_TRADE_dataset():
-    pass
+def collate_TRADE_dataset(batch: List[OpenVocabDSTFeature]):
+    input_ids = torch.LongTensor(
+        _pad_ids([b.input_idx_sent for b in batch], pad_token_id)
+    )
+    segment_ids = torch.LongTensor(
+        _pad_ids([b.segment_idx for b in batch], pad_token_id)
+    )
+    input_masks = input_ids.ne(pad_token_id)
+
+    gating_ids = torch.LongTensor([b.gating for b in batch])
+    target_ids = _pad_id_of_matrix(
+        [torch.LongTensor(b.target) for b in batch],
+        pad_token_id,
+    )
+
+    label_texts = [b.target_origin for b in batch]
+    return input_ids, segment_ids, input_masks, gating_ids, target_ids, label_texts
 
 
 
@@ -171,7 +207,8 @@ def _convert_to_TRADE_feature(
         input_idx_sent=input_idx_sent,
         segment_idx=segment_idx,
         target=target_idx_group,
-        gating=gating_idx_list
+        gating=gating_idx_list,
+        target_origin=input_segment.label
     )
 
 
@@ -274,11 +311,17 @@ def _convert_data_from_raw(
 
     # DSTInputSegment 리스트로 변환
     train_input_folds, dev_input_folds = [], []
-    for train_fold, dev_fold in zip(train_data_folds, dev_data_folds):
-        train_input_folds.append(_generate_dst_input(train_fold))
-        dev_input_folds.append(_generate_dst_input(dev_fold))
-    
-    return train_input_folds, dev_input_folds
+    if len(dev_data_folds) != 0:
+        for train_fold, dev_fold in zip(train_data_folds, dev_data_folds):
+            train_input_folds.append(_generate_dst_input(train_fold))
+            dev_input_folds.append(_generate_dst_input(dev_fold))
+        
+        return train_input_folds, dev_input_folds
+    else:
+        for train_data in train_data_folds:
+            train_input_folds.append(_generate_dst_input(train_data))
+        
+        return train_input_folds, None
 
 
 def _generate_dst_input(data: List) -> List:

@@ -18,7 +18,7 @@ def initialize():
             "training_dialogue_data": "/opt/ml/input/data/train_dataset/train_dials.json",
             "training_slot_meta_data": "/opt/ml/input/data/train_dataset/slot_meta.json",
             "training_ontology_data": "/opt/ml/input/data/train_dataset/ontology.json",
-            "training_features_data": "/opt/ml/input/data/train_dataset/open_vocab_features.pkl",
+            "training_features_data": None,
             "evaluation_dialogue_data": "/opt/ml/input/data/eval_dataset/eval_dials.json",
             "evaluation_slot_meta_data": "/opt/ml/input/data/eval_dataset/slot_meta.json",
         },
@@ -35,21 +35,30 @@ def initialize():
                 "model": {
                     "type" : "TRADE",
                     "prtrained_embedding_model": "monologg/koelectra-base-v3-discriminator",
-                },
-                "args": {
-                    "vocab_size": 1,
-                    "hidden_size": 1,
-                    "hidden_dropout_prob": 1,
-                    "n_gate": 1,
-                    "vocab_size": 1,
-                    "vocab_size": 1,
-                    "vocab_size": 1,
-                    "vocab_size": 1,
+                    # prtrained_embedding_model은 subword vocab을 위한 것임.
+                    "args": {
+                        "hidden_size": 768,
+                        "hidden_dropout_prob": 0.1,
+                        "proj_dim": None,
+                        # proj_dim은 만약 지정되면 기존의 hidden_size는 embedding dimension으로 취급되고, proj_dim이 GRU의 hidden_size로 사용됨. hidden_size보다 작아야 함.
+                    },
                 },
                 "dev_split" : {
                     "split_k" : 5,
-                    "target" : None
+                    "target" : 3
                 },
+                "optimizer" : {
+                    "name" : "AdamW",
+                    "args" : {
+                        "lr" : 1e-4,
+                    }
+                },
+                "warmup_ratio" : 0.1,
+                "teacher_forcing" : 0.5,
+                "max_grad_norm" : 1.0,
+                "train_batch_size" : 16,
+                "dev_batch_size" : 32,
+                "epochs" : 30,
                 "seed": 327459
             }
         },
@@ -131,5 +140,9 @@ if __name__ == "__main__":
             trainee.train()
         
         if do_inference:
-            pass
+            print("Run below")
+            print()
+            print("SM_CHANNEL_EVAL=data/eval_dataset/public SM_CHANNEL_MODEL=[Model Checkpoint Path] SM_OUTPUT_DATA_DIR=[Output path] python inference.py")
+    
+    print("Finished whole process!!")
             
