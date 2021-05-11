@@ -1,13 +1,18 @@
-from typing import Any
+# from typing import Any
 
-class GeneralObject:
-    pass
+# class GeneralObject:
+#     pass
 
-config = GeneralObject()
-config.vocab_size = 0
-config.hidden_size = 0
-config.hidden_dropout_prob = 0
-config.n_gate = 0
-config.proj_dim = 0
+# config = GeneralObject()
+# config.vocab_size = 0
+# config.hidden_size = 0
+# config.hidden_dropout_prob = 0
+# config.n_gate = 0
+# config.proj_dim = 0
 
-print(config.n_gate)
+# print(config.n_gate)
+
+if 0 > 3 or \
+    3 < 2:
+    print("OK")
+    

@@ -7,7 +7,6 @@ import torch
 import yaml
 
 import dst.train
-from dst.data.loader import OpenVocabDSTFeature
 from dst.train import TraineeBase
 
 
@@ -56,9 +55,16 @@ def initialize():
                 "warmup_ratio" : 0.1,
                 "teacher_forcing" : 0.5,
                 "max_grad_norm" : 1.0,
-                "train_batch_size" : 16,
-                "dev_batch_size" : 32,
+                "train_batch_size" : 32,
+                "dev_batch_size" : 64,
                 "epochs" : 30,
+                "gate_ids" : { 
+                    "none": 0, 
+                    "dontcare": 1, 
+                    "yes": 2, 
+                    "no": 3, 
+                    "ptr": 4 
+                },
                 "seed": 327459
             }
         },
@@ -144,5 +150,5 @@ if __name__ == "__main__":
             print()
             print("SM_CHANNEL_EVAL=data/eval_dataset/public SM_CHANNEL_MODEL=[Model Checkpoint Path] SM_OUTPUT_DATA_DIR=[Output path] python inference.py")
     
-    print("Finished whole process!!")
+    print("Finished process!!")
             

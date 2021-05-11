@@ -6,12 +6,12 @@ from typing import Any, Dict, List
 import numpy as np
 import torch
 import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from transformers import AdamW, BertTokenizer, get_linear_schedule_with_warmup
 
 from dst.data import loader
-from dst.evaluation import _evaluation
 from dst.inference import inference
 from dst.model import TRADE, TRADEConfig, masked_cross_entropy_for_value
 
@@ -71,6 +71,7 @@ class TRADETrainee(TraineeBase):
                 dataset_paths["training_dialogue_data"],
                 dataset_paths["training_slot_meta_data"],
                 self.tokenizer,
+                self.hyperparameters["gate_ids"],
                 dev_split_k=hyperparameters["dev_split"]["split_k"],
                 seed=hyperparameters["seed"],
             )
@@ -86,14 +87,26 @@ class TRADETrainee(TraineeBase):
         print() # End initializing
     
     def train(self):
+        model_save_dir = f"{self.save_paths['checkpoints_dir']}/{self.name}"
+
+        if not os.path.isdir(model_save_dir):
+            os.mkdir(model_save_dir)
+
         for fold, (training_dataset, dev_dataset) in enumerate(zip(self.training_datasets, self.dev_datasets)):
             print(f"Training start with fold {fold}...")
+
+            # 기본 세팅
+            if not os.path.isdir(f"{model_save_dir}/{fold}"):
+                os.mkdir(f"{model_save_dir}/{fold}")
+            logger = SummaryWriter(
+                log_dir=f"{self.save_paths['tensorboard_log_dir']}/{self.name}/{fold}/"
+            )
             
             pretrained_model_name = self.hyperparameters["model"]["prtrained_embedding_model"]
 
             config = TRADEConfig(
                 vocab_size=len(self.tokenizer),
-                n_gate=3,   # gate 갯수는 loader._convert_to_TRADE_feature의 gating2id Dictionary 길이와 같다.
+                n_gate=len(self.hyperparameters["gate_ids"]),   # gate 갯수
                 # gate를 yaml에 지정하는게 바람직한 일일까?
                 **self.hyperparameters["model"]["args"]
             )
@@ -103,6 +116,10 @@ class TRADETrainee(TraineeBase):
             model.set_subword_embedding(pretrained_model_name)  # Subword Embedding 초기화
             print(f"Subword Embeddings is loaded from {pretrained_model_name}")
             model.to(self.device)
+
+            # Test 코드
+            # ckpt = torch.load(f"{model_save_dir}/{fold}/model_best.bin", map_location="cpu")
+            # model.load_state_dict(ckpt)
             print("Model initialized")
             print()
 
@@ -170,8 +187,8 @@ class TRADETrainee(TraineeBase):
                     
                     # gating loss
                     loss_2 = loss_fnc_2(
-                        all_gate_outputs.contiguous().view(-1, 3),
-                        # 주의: view의 두번째 인자(3)에는 gate 갯수가 들어가야 함.
+                        all_gate_outputs.contiguous().view(-1, len(self.hyperparameters["gate_ids"])),
+                        # 주의: view의 두번째 인자(3 or 5)에는 gate 갯수가 들어가야 함.
                         gating_ids.contiguous().view(-1),
                     )
                     loss = loss_1 + loss_2
@@ -185,11 +202,25 @@ class TRADETrainee(TraineeBase):
                     if step % 100 == 0:
                         print(f"Epoch: [{epoch}/{n_epochs}], Step: [{step}/{len(train_loader)}]")
                         print(f"loss: {loss.item()} gen_loss: {loss_1.item()} gate_loss: {loss_2.item()}")
+                        logger.add_scalar("Train/loss_sum", loss.item(), epoch * len(train_loader) + step)
+                        logger.add_scalar("Train/gen_loss", loss_1.item(), epoch * len(train_loader) + step)
+                        logger.add_scalar("Train/gate_loss", loss_2.item(), epoch * len(train_loader) + step)
 
-                predictions, labels = inference(model, dev_loader, self.slot_meta, self.device, self.tokenizer)
+                predictions, labels = inference(model, dev_loader, self.slot_meta, self.device, self.tokenizer, self.hyperparameters["gate_ids"])
+
+                logger.add_text("Prediction Sample", "\n".join(str(predictions[0:10])), epoch)
+                logger.add_text("Label Sample", "\n".join(str(labels[0:10])), epoch)
+
                 eval_result = _evaluation(predictions, labels, self.tokenized_slot_meta)
                 for k, v in eval_result.items():
                     print(f"{k}: {v}")
+                # "joint_goal_accuracy": joint_goal_accuracy,
+                # "turn_slot_accuracy": turn_acc_score,
+                # "turn_slot_f1": slot_F1_score,
+
+                logger.add_scalar("Val/joint_goal_accuracy", eval_result["joint_goal_accuracy"], epoch)
+                logger.add_scalar("Val/turn_slot_accuracy", eval_result["turn_slot_accuracy"], epoch)
+                logger.add_scalar("Val/slot_f1", eval_result["turn_slot_f1"], epoch)
 
                 if best_score < eval_result['joint_goal_accuracy']:
                     print("Update Best checkpoint!")
@@ -197,13 +228,12 @@ class TRADETrainee(TraineeBase):
                     best_checkpoint = epoch
 
                     # 모델 저장
-                    if not os.path.isdir(f"{self.save_paths['checkpoints_dir']}/{fold}"):
-                        os.mkdir(f"{self.save_paths['checkpoints_dir']}/{fold}")
-
-                    save_file_path = f"{self.save_paths['checkpoints_dir']}/{fold}/model_best.bin"
+                    save_file_path = f"{model_save_dir}/{fold}/model_best.bin"
 
                     torch.save(model.state_dict(), save_file_path)
                     print(f"Best checkpoint saved at {save_file_path}")
+            
+            print(f"Best checkpoint for fold {fold} is {best_checkpoint} epoch.")
 
 
 def _evaluation(preds, labels: List[List[str]], slot_meta):
@@ -218,9 +248,6 @@ def _evaluation(preds, labels: List[List[str]], slot_meta):
     result = evaluator.compute()
     print(result)
     return result
-
-
-
 
 
 class DSTEvaluator:

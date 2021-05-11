@@ -1,3 +1,4 @@
+from typing import Dict
 import torch
 from tqdm import tqdm
 from transformers.models.bert.tokenization_bert import BertTokenizer
@@ -9,7 +10,7 @@ def postprocess_state(state):
     return state
 
 
-def inference(model, eval_loader, slot_meta, device, tokenizer):
+def inference(model, eval_loader, slot_meta, device, tokenizer, gating2id: Dict[str, int]):
     model.eval()
     predictions = []
     labels = []
@@ -28,9 +29,11 @@ def inference(model, eval_loader, slot_meta, device, tokenizer):
 
             _, generated_ids = o.max(-1)
             _, gated_ids = g.max(-1)
+            
+            # Validation Loss를 구해보자
 
         for gate, gen in zip(gated_ids.tolist(), generated_ids.tolist()):
-            prediction = recover_state(gate, gen, slot_meta, tokenizer)
+            prediction = recover_state(gate, gen, slot_meta, tokenizer, gating2id)
             prediction = postprocess_state(prediction)
             predictions.append(prediction)
         
@@ -39,7 +42,7 @@ def inference(model, eval_loader, slot_meta, device, tokenizer):
     return predictions, labels
 
 
-def recover_state(gate_list, gen_list, slot_meta, tokenizer: BertTokenizer):
+def recover_state(gate_list, gen_list, slot_meta, tokenizer: BertTokenizer, gating2id: Dict[str, int]):
     # 원래 레이블을 되찾아 주는 함수
     # gate가 ptr 이면 텍스트(gen)으로부터 텍스트 복원
     # gate가 ptr과 none이외 (여기서는 dontcare경우만)이면 gate값을 value로 복원
@@ -47,15 +50,15 @@ def recover_state(gate_list, gen_list, slot_meta, tokenizer: BertTokenizer):
     assert len(gate_list) == len(slot_meta)
     assert len(gen_list) == len(slot_meta)
 
-    id2gating = { 0: "none", 1: "dontcare", 2: "ptr" }
+    id2gating = {v: k for k, v in gating2id.items()}
 
     recovered = []
     for slot, gate, value in zip(slot_meta, gate_list, gen_list):
         if id2gating[gate] == "none":
             continue
 
-        if id2gating[gate] == "dontcare":
-            recovered.append(f"{slot}-dontcare")
+        if id2gating[gate] != "ptr":
+            recovered.append(f"{slot}-{id2gating[gate]}")
             continue
 
         token_id_list = []

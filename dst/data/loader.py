@@ -50,6 +50,7 @@ def load_TRADE_dataset_from_raw(
         raw_dir_path: str,
         raw_slot_meta_path: str,
         tokenizer: BertTokenizer,
+        gate: Dict[str, int],
         dev_split_k: int = 5, 
         seed: int = None
     ) -> Tuple[List[WOSDataset], List[WOSDataset], List[List[int]]]:
@@ -80,15 +81,15 @@ def load_TRADE_dataset_from_raw(
     if dev_input_folds is not None:     # Development (Validation) 데이터가 있는 경우
         for index, (train_input, dev_input) in enumerate(zip(train_input_folds, dev_input_folds)):
             print(f"Convert [{index}] training data to features")
-            train_feature_folds.append([_convert_to_TRADE_feature(dialogue, sl_m_data, tokenizer) for dialogue in tqdm(train_input)])
+            train_feature_folds.append([_convert_to_TRADE_feature(dialogue, sl_m_data, tokenizer, gate) for dialogue in tqdm(train_input)])
 
             print(f"Convert [{index}] development data to features")
-            dev_feature_folds.append([_convert_to_TRADE_feature(dialogue, sl_m_data, tokenizer) for dialogue in tqdm(dev_input)])
+            dev_feature_folds.append([_convert_to_TRADE_feature(dialogue, sl_m_data, tokenizer, gate) for dialogue in tqdm(dev_input)])
 
     else:                               # Development (Validation) 데이터가 없는 경우
         for index, train_input in enumerate(train_input_folds):
             print(f"Convert [{index}] training data to features")
-            train_feature_folds.append([_convert_to_TRADE_feature(dialogue, sl_m_data, tokenizer) for dialogue in tqdm(train_input)])
+            train_feature_folds.append([_convert_to_TRADE_feature(dialogue, sl_m_data, tokenizer, gate) for dialogue in tqdm(train_input)])
 
     print(f"Converting {len(train_feature_folds)} data finished")
 
@@ -99,8 +100,7 @@ def load_TRADE_dataset_from_raw(
             (
                 train_feature_folds, 
                 dev_feature_folds
-            ), 
-        fwb)
+            ), fwb)
     print(f"Features saved at {tokenized_data_path}")
 
     return load_TRADE_dataset_from_features(tokenized_data_path, raw_slot_meta_path, tokenizer)
@@ -109,7 +109,7 @@ def load_TRADE_dataset_from_raw(
 def load_TRADE_dataset_from_features(
         tokenized_data_path: str,
         raw_slot_meta_path: str,
-        tokenizer: BertTokenizer
+        tokenizer: BertTokenizer,
     ) -> Tuple[List[WOSDataset], List[WOSDataset], List[List[int]]]:
     # 강제로 다시 읽어 들임. pickle이 제대로 저장되어야 함
     print(f"Loading Features...[{tokenized_data_path}] {int(os.path.getsize(tokenized_data_path) / (1024**2))} MB")
@@ -171,11 +171,9 @@ def _convert_to_TRADE_feature(
         input_segment: DSTInputExample, 
         slot_meta: List, 
         tokenizer: BertTokenizer,
+        gating2id: Dict[str, int],
         max_tokenizing_length: int = 512,
     ):
-    # 이러면 매 호출마다 Dictionary가 생성되서 비효율적이지만
-    # 이해하기 쉬운 코드를 위해서 일단 이렇게 코드 작성
-    gating2id = { "none": 0, "dontcare": 1, "ptr": 2 }
 
     dialogue_context = " [SEP] ".join(input_segment.context_turns + input_segment.current_turn)
 

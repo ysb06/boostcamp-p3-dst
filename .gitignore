@@ -130,6 +130,7 @@ dmypy.json
 
 # vscode files
 *.code-workspace
+.vscode
 
 # Generated files and folders
 [Rr]esults
