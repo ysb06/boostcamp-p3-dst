@@ -5,7 +5,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple, Union
 
-import pandas as pd
 import torch
 from sklearn.model_selection import StratifiedKFold
 from torch.utils.data import Dataset

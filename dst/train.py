@@ -20,13 +20,14 @@ class TraineeBase:
     def __init__(
         self,
         trainee_name: str,
-        dataset_paths: Dict,
-        save_paths: Dict,
+        data_paths: Dict[str, str],
+        save_paths: Dict[str, str],
         hyperparameters: Dict,
         device: torch.device,
     ) -> None:
         self.name = trainee_name
         self.device = device
+        self.data_paths = data_paths
         self.save_paths = save_paths
         self.hyperparameters = hyperparameters
 
@@ -40,12 +41,12 @@ class TRADETrainee(TraineeBase):
     def __init__(
         self,
         trainee_name: str,
-        dataset_paths: Dict,
+        data_paths: Dict,
         save_paths: Dict,
         hyperparameters: Dict,
         device: torch.device
     ) -> None:
-        super().__init__(trainee_name, dataset_paths, save_paths, hyperparameters, device)
+        super().__init__(trainee_name, data_paths, save_paths, hyperparameters, device)
 
         tokenizer_model_name = hyperparameters["model"]["prtrained_embedding_model"]
         print(f"Loading [{tokenizer_model_name}] tokenizer...")
@@ -54,22 +55,22 @@ class TRADETrainee(TraineeBase):
         print()
 
         # 이 부분도 생각하지 못했음...좋지 않음
-        with open(dataset_paths["training_slot_meta_data"], 'r') as fr:
+        with open(data_paths["training_slot_meta_data"], 'r') as fr:
             self.slot_meta: List[str] = json.load(fr)
         print("Features loaded")
 
-        features_path = dataset_paths["training_features_data"]
+        features_path = data_paths["training_features_data"]
         if features_path is not None:
             training_datasets, dev_datasets, self.tokenized_slot_meta = loader.load_TRADE_dataset_from_features(
                 features_path,
-                dataset_paths["training_slot_meta_data"],
+                data_paths["training_slot_meta_data"],
                 self.tokenizer
             )
         else:
             training_datasets, dev_datasets, self.tokenized_slot_meta = loader.load_TRADE_dataset_from_raw(
-                dataset_paths["root_dir"],
-                dataset_paths["training_dialogue_data"],
-                dataset_paths["training_slot_meta_data"],
+                data_paths["root_dir"],
+                data_paths["training_dialogue_data"],
+                data_paths["training_slot_meta_data"],
                 self.tokenizer,
                 self.hyperparameters["gate_ids"],
                 dev_split_k=hyperparameters["dev_split"]["split_k"],
@@ -328,6 +329,21 @@ def compute_prf(gold, pred):
         else:
             precision, recall, F1, count = 0, 0, 0, 1
     return F1, recall, precision, count
+
+
+class BertTradeTrainee(TraineeBase):
+    def __init__(
+            self, 
+            trainee_name: str, 
+            data_paths: Dict[str, str], 
+            save_paths: Dict[str, str], 
+            hyperparameters: Dict, 
+            device: torch.device
+        ) -> None:
+        super().__init__(trainee_name, data_paths, save_paths, hyperparameters, device)
+    
+    def train(self):
+        print(self.hyperparameters)
 
 
 

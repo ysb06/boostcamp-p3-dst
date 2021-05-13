@@ -1,48 +1,37 @@
-data_path:
-  evaluation_dialogue_data: /opt/ml/input/data/eval_dataset/eval_dials.json
-  evaluation_slot_meta_data: /opt/ml/input/data/eval_dataset/slot_meta.json
-  root_dir: /opt/ml/input/data
-  training_dialogue_data: /opt/ml/input/data/train_dataset/train_dials.json
-  # training_features_data: null
-  training_features_data: /opt/ml/input/data/train_dataset/ov_features_10_327459.pkl
-  training_ontology_data: /opt/ml/input/data/train_dataset/ontology.json
-  training_slot_meta_data: /opt/ml/input/data/train_dataset/slot_meta.json
-save_path:
-  checkpoints_dir: ./results/checkpoint
-  root_dir: ./results
-  tensorboard_log_dir: ./results/tensorboard
-  yaml_log_dir: ./results/yaml_log
-training_base:
-  hyperparameters:
-    seed: 327459
-    train_batch_size: 32
-    dev_batch_size: 64
-    dev_split:
-      split_k: 10
-      target: 7
-      # 0 ~ 5 지하철 도메인 dev셋에 없음
-    model:
-      args:
-        hidden_dropout_prob: 0.1
-        hidden_size: 768
-        proj_dim: null
-      prtrained_embedding_model: monologg/koelectra-base-v3-discriminator
-      type: TRADE
-    optimizer:
-      args:
-        lr: 0.0001
-      name: AdamW
-    gate_ids:
-      none: 0 
-      dontcare: 1
-      yes: 2
-      no: 3 
-      ptr: 4 
-    epochs: 32
-    max_grad_norm: 1.0
-    teacher_forcing: 0.5
-    warmup_ratio: 0.1
-  trainee_name: No_name
-  trainee_type: TRADETrainee
-trainings:
-- trainee_name: TRADE_2_grow_batch
+data_paths:
+  train_root_dir: /opt/ml/input/data/eval_dataset
+  eval_root_dir: /opt/ml/input/data/train_dataset
+  training_dialogue_file: train_dials.json
+  training_ontology_file: ontology.json
+  training_slot_meta_file: slot_meta.json
+  evaluation_dialogue_file: eval_dials.json
+  evaluation_slot_meta_file: slot_meta.json
+
+save_paths:
+  root_dir: ./results/
+  checkpoints_dir: checkpoint/
+  tensorboard_log_dir: tensorboard/
+  yaml_log_dir: yaml_log/
+
+hyperparameters:
+  seed: 327459
+  train_batch_size: 32
+  dev_batch_size: 64
+  dev_split:
+    split_k: 10
+    target: 7   # 0 ~ 5 지하철 도메인 dev셋에 없음
+  model:
+    name: TRADE
+    backbone:
+      bert: 1
+    args:
+      hidden_dropout_prob: 0.1
+      hidden_size: 768
+      proj_dim: null
+  optimizer:
+    name: AdamW
+    args:
+      lr: 0.0001
+  epochs: 32
+trainee_name: PBT_1
+trainee_type: BertTradeTrainee
